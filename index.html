@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Konfigurátor rozlučky se svobodou</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* Layout: 4-step wizard on the left, sticky running summary ("the bill") on the right; stacks on mobile.
+   Single dark theme by choice: black club interior + metallic gold. */
+:root {
+  --ink: #ffffff;
+  --paper: #000000;
+  --surface: #0f0e0c;
+  --muted: #a39e94;
+  --line: #2b2822;
+  --accent: #d9ad45;
+  --accent-ink: #000000;
+  --accent-soft: #241d0e;
+  --gold: linear-gradient(100deg, #8a6418 0%, #d9ad45 35%, #f6dc8c 55%, #c99a32 80%, #8a6418 100%);
+  --ok: #d9ad45;
+  --font-display: "Archivo", "Arial Black", system-ui, sans-serif;
+  --font-body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; display: grid; gap: 24px; }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+header.top h1 { font-size: clamp(28px, 4.4vw, 44px); font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; }
+header.top h1 span { background: var(--gold); -webkit-background-clip: text; background-clip: text; color: transparent; }
+header.top { border-bottom: 1px solid var(--line); padding-bottom: 20px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .5em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+
+.steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
+.steps button {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: 6px 14px 6px 6px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 14px;
+}
+.steps button:disabled { cursor: not-allowed; opacity: .5; }
+.steps .dot {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--paper); border: 1px solid var(--line); font-size: 13px;
+}
+.steps button[aria-current="step"] { border-color: var(--accent); }
+.steps button[aria-current="step"] .dot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.steps button.done .dot { background: var(--gold); color: #000; border-color: var(--accent); }
+.panel h2, .summary h2 { text-transform: uppercase; letter-spacing: -0.01em; font-weight: 900; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: grid; gap: 20px; }
+.panel h2 { font-size: 24px; font-weight: 800; }
+.panel .lead { margin: -12px 0 0; color: var(--muted); }
+.field-label { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; display: block; }
+
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.choice {
+  border: 1.5px solid var(--line); background: var(--surface); border-radius: var(--radius);
+  padding: 12px 14px; text-align: left; cursor: pointer; display: grid; gap: 2px;
+}
+.choice:hover { border-color: var(--muted); }
+.choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.choice .flag { font-size: 26px; line-height: 1; }
+.choice strong { font-size: 16px; }
+.choice small { color: var(--muted); font-size: 13px; }
+
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+.stepper { display: flex; align-items: center; border: 1.5px solid var(--line); border-radius: var(--radius); width: max-content; overflow: hidden; }
+.stepper button { width: 44px; height: 48px; border: 0; background: var(--paper); font-size: 22px; cursor: pointer; }
+.stepper button:disabled { opacity: .35; cursor: not-allowed; }
+.stepper output { min-width: 64px; text-align: center; font-size: 22px; font-weight: 700; }
+.hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+select, input[type="text"], input[type="email"], input[type="tel"], textarea {
+  width: 100%; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 11px 12px;
+}
+textarea { min-height: 90px; resize: vertical; }
+.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 11px 16px; cursor: pointer; font-weight: 600; }
+.seg button + button { border-left: 1.5px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--gold); color: var(--accent-ink); }
+.seg.cur { display: flex; }
+.seg.cur button { flex: 1; padding: 8px 0; font-size: 14px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.acts { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.act {
+  border: 1.5px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 8px;
+  grid-template-rows: auto 1fr auto; background: var(--surface); position: relative;
+}
+.act.sel { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--accent); }
+.act .cat { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+.act h3 { font-size: 18px; font-weight: 600; margin-top: 2px; }
+.act p { margin: 0; color: var(--muted); font-size: 14px; }
+.act .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.act .price { font-weight: 700; }
+.act .price small { font-weight: 500; color: var(--muted); }
+.act .meta { font-size: 13px; color: var(--muted); }
+.toggle { border: 1.5px solid var(--accent); background: transparent; color: var(--accent); border-radius: 8px; padding: 6px 12px; font-weight: 700; cursor: pointer; font-size: 14px; }
+.act.sel .toggle { background: var(--gold); color: var(--accent-ink); border-color: var(--accent); }
+.empty { color: var(--muted); padding: 16px; border: 1.5px dashed var(--line); border-radius: var(--radius); }
+
+.nav { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+.btn { border: 0; border-radius: 999px; padding: 13px 26px; font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: .02em; }
+.btn.primary { background: var(--gold); color: var(--accent-ink); }
+.btn.primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn.ghost { background: transparent; border: 1.5px solid var(--line); }
+
+.summary { position: sticky; top: 16px; background: var(--surface); color: var(--ink); border: 1px solid var(--accent); border-radius: var(--radius); padding: 22px; display: grid; gap: 14px; }
+.summary .big { background: var(--gold); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.summary h2 { font-size: 20px; }
+.summary dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; }
+.summary dt { opacity: .65; }
+.summary dd { margin: 0; text-align: right; font-weight: 600; }
+.summary ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.summary li { display: flex; justify-content: space-between; gap: 10px; }
+.summary li.none { opacity: .6; }
+.totals { border-top: 1px dashed var(--line); padding-top: 12px; display: grid; gap: 4px; }
+.totals .line { display: flex; justify-content: space-between; font-size: 14px; }
+.totals .big { font-family: var(--font-display); font-size: 30px; font-weight: 800; text-align: right; }
+.summary .note { font-size: 12px; opacity: .65; margin: 0; }
+@media (max-width: 900px) { .summary { position: static; } }
+
+.recap { display: grid; gap: 8px; }
+.recap table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.recap td, .recap th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.recap td:last-child, .recap th:last-child { text-align: right; }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form .full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .form { grid-template-columns: 1fr; } }
+.form label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 4px; }
+.err { color: var(--accent); font-size: 13px; min-height: 0; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.check input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); }
+
+.success { text-align: center; padding: 40px 24px; display: grid; gap: 12px; justify-items: center; }
+.success .tick { width: 64px; height: 64px; border-radius: 50%; background: var(--gold); color: #000; display: grid; place-items: center; font-size: 34px; }
+.success p { color: var(--muted); max-width: 52ch; margin: 0; }
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: no-preference) {
+  .panel { animation: in .25s ease-out; }
+  @keyframes in { from { transform: translateY(6px); } to { transform: none; } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Rozlučka se svobodou</div>
+      <h1>Sestav si <span>noc na míru</span></h1>
+      <p>Vyberte město, partu a program. Orientační cenu vidíte hned, závaznou nabídku pošleme do 24 hodin.</p>
+    </div>
+    <ol class="steps" id="steps"></ol>
+  </header>
+
+  <div class="layout">
+    <main id="main"></main>
+    <aside class="summary" aria-live="polite" id="summary"></aside>
+  </div>
+</div>
+
+<script>
+// ---- Data (example values; replace with real catalogue / API later) ----
+// Indicative fixed rates: units of currency per 1 EUR.
+const RATES = { CZK: 25, EUR: 1, USD: 1.08, GBP: 0.85 };
+const COUNTRIES = [
+  { id: "cz", name: "Česko", flag: "🇨🇿", currency: "CZK", cities: [
+    { id: "prg", name: "Praha" }, { id: "brn", name: "Brno" }, { id: "ost", name: "Ostrava" } ] },
+  { id: "sk", name: "Slovensko", flag: "🇸🇰", currency: "EUR", cities: [
+    { id: "bts", name: "Bratislava" }, { id: "kos", name: "Košice" } ] },
+  { id: "pl", name: "Polsko", flag: "🇵🇱", currency: "EUR", cities: [
+    { id: "krk", name: "Krakov" }, { id: "wro", name: "Vratislav" } ] },
+  { id: "hu", name: "Maďarsko", flag: "🇭🇺", currency: "EUR", cities: [
+    { id: "bud", name: "Budapešť" } ] },
+  { id: "de", name: "Německo", flag: "🇩🇪", currency: "EUR", cities: [
+    { id: "ber", name: "Berlín" }, { id: "drs", name: "Drážďany" } ] },
+];
+const CATEGORIES = { adrenalin: "Adrenalin", fun: "Zábava", food: "Jídlo a pití", night: "Noční život", relax: "Relax" };
+const ALL = ["prg","brn","ost","bts","kos","krk","wro","bud","ber","drs"];
+const ACTIVITIES = [
+  { id: "paintball", cat: "adrenalin", name: "Paintball", desc: "Dvě hodiny bitvy v areálu, vybavení a 300 kuliček na osobu.", dur: "2 h", price: 32, min: 6, cities: ALL },
+  { id: "shooting", cat: "adrenalin", name: "Střelnice", desc: "Pistole, revolver a samopal s instruktorem, 50 nábojů na osobu.", dur: "1,5 h", price: 69, min: 4, cities: ["prg","brn","ost","bts","krk","bud","ber"] },
+  { id: "karts", cat: "adrenalin", name: "Motokáry – závod", desc: "Trénink, kvalifikace a závod o pohár pro ženicha.", dur: "1,5 h", price: 45, min: 4, cities: ALL },
+  { id: "quad", cat: "adrenalin", name: "Čtyřkolky v terénu", desc: "Projížďka s průvodcem lesními a polními cestami.", dur: "2 h", price: 79, min: 4, cities: ["prg","brn","ost","bts","kos","krk","bud"] },
+  { id: "rafting", cat: "adrenalin", name: "Rafting", desc: "Divoká voda na umělém kanále s instruktorem.", dur: "2 h", price: 55, min: 6, cities: ["prg","bts","krk"] },
+  { id: "escape", cat: "fun", name: "Úniková hra", desc: "Soukromá místnost pro celou partu, 60 minut na útěk.", dur: "1 h", price: 22, min: 4, cities: ALL },
+  { id: "beerbike", cat: "fun", name: "Beer bike", desc: "Pivní kolo městem, 30 l čepovaného piva na palubě.", dur: "1,5 h", price: 35, min: 8, cities: ["prg","brn","bts","krk","bud","ber"] },
+  { id: "boat", cat: "fun", name: "Plavba lodí s barem", desc: "Soukromá loď po řece, drinky a hudba.", dur: "2 h", price: 49, min: 8, cities: ["prg","bts","bud","ber","drs"] },
+  { id: "groom", cat: "fun", name: "Kostým a úkoly pro ženicha", desc: "Převlek, seznam úkolů do ulic a fotodokumentace.", dur: "celý den", price: 9, min: 1, cities: ALL },
+  { id: "tasting", cat: "food", name: "Degustace piva", desc: "8 vzorků z místních minipivovarů se sládkem.", dur: "2 h", price: 29, min: 4, cities: ALL },
+  { id: "steak", cat: "food", name: "Steaková večeře", desc: "Tříchodové menu v steakhousu, rezervovaný stůl.", dur: "2 h", price: 52, min: 4, cities: ALL },
+  { id: "beerspa", cat: "relax", name: "Pivní lázně", desc: "Koupel v pivní lázni, neomezené čepované pivo.", dur: "1 h", price: 59, min: 2, cities: ["prg","brn","bts","bud"] },
+  { id: "thermal", cat: "relax", name: "Termální lázně", desc: "Vstup do termálních lázní a sauna.", dur: "3 h", price: 38, min: 2, cities: ["bud","bts","kos"] },
+  { id: "club", cat: "night", name: "VIP stůl v klubu", desc: "Rezervovaný stůl, vstup bez fronty, láhev na 4 osoby.", dur: "noc", price: 40, min: 6, cities: ALL },
+  { id: "pubcrawl", cat: "night", name: "Pub crawl s průvodcem", desc: "4 bary, panák v každém a vstup do klubu.", dur: "4 h", price: 25, min: 6, cities: ["prg","brn","bts","krk","wro","bud","ber"] },
+];
+
+// ---- State ----
+const state = { step: 1, country: null, city: null, people: 10, days: 2, month: "", acts: new Set(), filter: "all", sent: false, currency: "EUR" };
+const STEPS = ["Destinace", "Parta a termín", "Aktivity", "Poptávka"];
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const country = () => COUNTRIES.find(c => c.id === state.country);
+const city = () => country()?.cities.find(c => c.id === state.city);
+const selected = () => ACTIVITIES.filter(a => state.acts.has(a.id));
+const money = eur => (eur * RATES[state.currency]).toLocaleString("cs-CZ",
+  { style: "currency", currency: state.currency, maximumFractionDigits: 0, minimumFractionDigits: 0 });
+const months = () => {
+  const out = [], d = new Date(); d.setDate(1);
+  for (let i = 1; i <= 12; i++) {
+    const m = new Date(d.getFullYear(), d.getMonth() + i, 1);
+    out.push(m.toLocaleDateString("cs-CZ", { month: "long", year: "numeric" }));
+  }
+  return out;
+};
+const stepValid = n => n === 1 ? !!state.city : n === 2 ? state.people >= 4 : n === 3 ? state.acts.size > 0 : true;
+const maxReachable = () => { let n = 1; while (n < 4 && stepValid(n)) n++; return n; };
+
+function go(n) { if (n <= maxReachable()) { state.step = n; render(); $("#main").scrollIntoView({ block: "start", behavior: "smooth" }); } }
+
+// ---- Render ----
+function renderSteps() {
+  const reach = maxReachable();
+  $("#steps").innerHTML = STEPS.map((t, i) => {
+    const n = i + 1, done = n < state.step && stepValid(n);
+    return `<li><button type="button" data-go="${n}" ${n > reach || state.sent ? "disabled" : ""} ${n === state.step ? 'aria-current="step"' : ""} class="${done ? "done" : ""}">
+      <span class="dot">${done ? "✓" : n}</span>${t}</button></li>`;
+  }).join("");
+}
+
+function navHtml(back, nextLabel) {
+  return `<div class="nav">
+    ${back ? `<button type="button" class="btn ghost" data-go="${state.step - 1}">← Zpět</button>` : "<span></span>"}
+    ${nextLabel ? `<button type="button" class="btn primary" data-go="${state.step + 1}" ${stepValid(state.step) ? "" : "disabled"}>${nextLabel} →</button>` : ""}
+  </div>`;
+}
+
+function step1() {
+  const c = country();
+  return `<section class="panel">
+    <h2>Kam to bude?</h2>
+    <p class="lead">Vyberte zemi a město. Nabídka aktivit se přizpůsobí vybranému městu.</p>
+    <div><span class="field-label" id="lbl-country">Země</span>
+      <div class="choice-grid" role="group" aria-labelledby="lbl-country">
+      ${COUNTRIES.map(x => `<button type="button" class="choice" data-country="${x.id}" aria-pressed="${x.id === state.country}">
+        <span class="flag" aria-hidden="true">${x.flag}</span><strong>${x.name}</strong><small>${x.cities.length} ${x.cities.length === 1 ? "město" : "města"}</small></button>`).join("")}
+      </div></div>
+    ${c ? `<div><span class="field-label" id="lbl-city">Město</span>
+      <div class="choice-grid" role="group" aria-labelledby="lbl-city">
+      ${c.cities.map(x => {
+        const n = ACTIVITIES.filter(a => a.cities.includes(x.id)).length;
+        return `<button type="button" class="choice" data-city="${x.id}" aria-pressed="${x.id === state.city}"><strong>${x.name}</strong><small>${n} aktivit</small></button>`;
+      }).join("")}
+      </div></div>` : ""}
+    ${navHtml(false, "Pokračovat")}
+  </section>`;
+}
+
+function step2() {
+  return `<section class="panel">
+    <h2>Kolik vás bude a kdy?</h2>
+    <p class="lead">Počet účastníků včetně ženicha. Termín stačí orientačně.</p>
+    <div class="row">
+      <div><span class="field-label" id="lbl-people">Účastníci</span>
+        <div class="stepper" role="group" aria-labelledby="lbl-people">
+          <button type="button" data-people="-1" aria-label="Ubrat účastníka" ${state.people <= 4 ? "disabled" : ""}>−</button>
+          <output class="num" aria-live="polite">${state.people}</output>
+          <button type="button" data-people="1" aria-label="Přidat účastníka" ${state.people >= 30 ? "disabled" : ""}>+</button>
+        </div>
+        <div class="hint">4 až 30 osob. Pro větší skupiny napište do poznámky.</div>
+      </div>
+      <div><span class="field-label" id="lbl-days">Délka akce</span>
+        <div class="seg" role="group" aria-labelledby="lbl-days">
+          ${[1, 2, 3].map(d => `<button type="button" data-days="${d}" aria-pressed="${state.days === d}">${d} ${d === 1 ? "den" : "dny"}</button>`).join("")}
+        </div>
+      </div>
+      <div><label class="field-label" for="month">Orientační termín</label>
+        <select id="month"><option value="">Zatím nevím</option>
+          ${months().map(m => `<option ${m === state.month ? "selected" : ""}>${m}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    ${navHtml(true, "Vybrat aktivity")}
+  </section>`;
+}
+
+function step3() {
+  const avail = ACTIVITIES.filter(a => a.cities.includes(state.city));
+  const shown = avail.filter(a => state.filter === "all" || a.cat === state.filter);
+  const cats = Object.entries(CATEGORIES).filter(([k]) => avail.some(a => a.cat === k));
+  return `<section class="panel">
+    <h2>Program: ${esc(city().name)}</h2>
+    <p class="lead">Ceny jsou orientační za osobu. Vyberte libovolný počet aktivit.</p>
+    <div class="filters" role="group" aria-label="Filtr kategorií">
+      <button type="button" class="chip" data-filter="all" aria-pressed="${state.filter === "all"}">Vše (${avail.length})</button>
+      ${cats.map(([k, v]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.filter === k}">${v}</button>`).join("")}
+    </div>
+    <div class="acts">
+      ${shown.length ? shown.map(a => {
+        const sel = state.acts.has(a.id), small = state.people < a.min;
+        return `<article class="act ${sel ? "sel" : ""}">
+          <div><div class="cat">${CATEGORIES[a.cat]}</div><h3>${a.name}</h3></div>
+          <p>${a.desc}</p>
+          <div>
+            <div class="meta">${a.dur} · od ${a.min} os.${small ? ` · <strong style="color:var(--accent)">vás je méně</strong>` : ""}</div>
+            <div class="foot">
+              <span class="price num">${money(a.price)} <small>/ os.</small></span>
+              <button type="button" class="toggle" data-act="${a.id}" aria-pressed="${sel}">${sel ? "✓ Vybráno" : "+ Přidat"}</button>
+            </div>
+          </div>
+        </article>`;
+      }).join("") : `<div class="empty">V této kategorii pro ${esc(city().name)} zatím nic nemáme.</div>`}
+    </div>
+    ${navHtml(true, "Shrnutí a poptávka")}
+  </section>`;
+}
+
+function step4() {
+  if (state.sent) {
+    return `<section class="panel success">
+      <div class="tick" aria-hidden="true">✓</div>
+      <h2>Poptávka je odeslaná</h2>
+      <p>Děkujeme. Ozveme se na <strong>${esc(state.form.email)}</strong> do 24 hodin se závaznou nabídkou pro ${state.people} osob v ${esc(city().name)}.</p>
+      <p>Orientační cena: <strong class="num">${money(selected().reduce((s, a) => s + a.price, 0) * state.people)}</strong></p>
+      <p class="hint">Ukázka konfigurátoru: poptávka se nikam neodesílá.</p>
+      <button type="button" class="btn ghost" id="restart">Sestavit novou rozlučku</button>
+    </section>`;
+  }
+  const f = state.form || {};
+  return `<section class="panel">
+    <h2>Shrnutí a poptávka</h2>
+    <div class="recap">
+      <table>
+        <thead><tr><th>Aktivita</th><th>Za osobu</th><th>Celkem</th></tr></thead>
+        <tbody>${selected().map(a => `<tr><td>${a.name}</td><td class="num">${money(a.price)}</td><td class="num">${money(a.price * state.people)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+    <form class="form" id="form" novalidate>
+      <div><label for="f-name">Jméno a příjmení</label><input type="text" id="f-name" name="name" autocomplete="name" value="${esc(f.name || "")}" required><div class="err" id="e-name"></div></div>
+      <div><label for="f-email">E-mail</label><input type="email" id="f-email" name="email" autocomplete="email" value="${esc(f.email || "")}" required><div class="err" id="e-email"></div></div>
+      <div><label for="f-phone">Telefon</label><input type="tel" id="f-phone" name="phone" autocomplete="tel" value="${esc(f.phone || "")}"></div>
+      <div><label for="f-groom">Jméno ženicha <span class="hint">(nepovinné)</span></label><input type="text" id="f-groom" name="groom" value="${esc(f.groom || "")}"></div>
+      <div class="full"><label for="f-note">Poznámka</label><textarea id="f-note" name="note" placeholder="Ubytování, doprava, speciální přání…">${esc(f.note || "")}</textarea></div>
+      <div class="full"><label class="check"><input type="checkbox" id="f-gdpr" name="gdpr" ${f.gdpr ? "checked" : ""}> Souhlasím se zpracováním osobních údajů pro účely vyřízení poptávky.</label><div class="err" id="e-gdpr"></div></div>
+      <div class="full nav">
+        <button type="button" class="btn ghost" data-go="3">← Zpět</button>
+        <button type="submit" class="btn primary">Odeslat nezávaznou poptávku</button>
+      </div>
+    </form>
+  </section>`;
+}
+
+function renderSummary() {
+  const sel = selected();
+  const perPerson = sel.reduce((s, a) => s + a.price, 0);
+  const c = country(), ct = city();
+  $("#summary").innerHTML = `
+    <h2>Vaše rozlučka</h2>
+    <div class="seg cur" role="group" aria-label="Měna">
+      ${Object.keys(RATES).map(k => `<button type="button" data-currency="${k}" aria-pressed="${state.currency === k}">${k}</button>`).join("")}
+    </div>
+    <dl>
+      <dt>Destinace</dt><dd>${ct ? `${c.flag} ${esc(ct.name)}` : "–"}</dd>
+      <dt>Účastníci</dt><dd class="num">${state.people} os.</dd>
+      <dt>Délka</dt><dd>${state.days} ${state.days === 1 ? "den" : "dny"}</dd>
+      <dt>Termín</dt><dd>${state.month || "neurčen"}</dd>
+    </dl>
+    <ul>${sel.length ? sel.map(a => `<li><span>${a.name}</span><span class="num">${money(a.price)}</span></li>`).join("") : `<li class="none">Zatím žádné aktivity</li>`}</ul>
+    <div class="totals">
+      <div class="line"><span>Za osobu</span><span class="num">${money(perPerson)}</span></div>
+      <div class="line"><span>Celkem za ${state.people} os.</span></div>
+      <div class="big num">${money(perPerson * state.people)}</div>
+    </div>
+    <p class="note">Orientační cena bez ubytování a dopravy.${state.currency !== "EUR" ? ` Přepočet kurzem 1 € = ${RATES[state.currency].toLocaleString("cs-CZ")} ${state.currency}.` : ""}</p>`;
+}
+
+function render() {
+  renderSteps();
+  $("#main").innerHTML = [step1, step2, step3, step4][state.step - 1]();
+  renderSummary();
+}
+
+// ---- Events ----
+document.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  const d = t.dataset;
+  if (d.go) return go(+d.go);
+  if (d.country) {
+    if (state.country !== d.country) {
+      state.country = d.country;
+      state.currency = country().currency;
+      const cs = country().cities;
+      state.city = cs.length === 1 ? cs[0].id : null;
+      pruneActs();
+    }
+  } else if (d.city) { state.city = d.city; pruneActs(); }
+  else if (d.people) state.people = Math.min(30, Math.max(4, state.people + +d.people));
+  else if (d.days) state.days = +d.days;
+  else if (d.currency) state.currency = d.currency;
+  else if (d.filter) state.filter = d.filter;
+  else if (d.act) state.acts.has(d.act) ? state.acts.delete(d.act) : state.acts.add(d.act);
+  else if (t.id === "restart") { Object.assign(state, { step: 1, country: null, city: null, acts: new Set(), filter: "all", sent: false, form: null }); }
+  else return;
+  render();
+});
+document.addEventListener("change", e => { if (e.target.id === "month") { state.month = e.target.value; renderSummary(); } });
+document.addEventListener("input", e => {
+  const form = e.target.closest("#form");
+  if (form) { const el = form.elements; state.form = Object.fromEntries(["name","email","phone","groom","note"].map(k => [k, el[k].value]).concat([["gdpr", el.gdpr.checked]])); }
+});
+document.addEventListener("submit", e => {
+  if (e.target.id !== "form") return;
+  e.preventDefault();
+  const f = e.target.elements;
+  state.form = { name: f.name.value.trim(), email: f.email.value.trim(), phone: f.phone.value, groom: f.groom.value, note: f.note.value, gdpr: f.gdpr.checked };
+  const errs = {
+    name: state.form.name ? "" : "Vyplňte jméno.",
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.form.email) ? "" : "Zadejte platný e-mail, třeba jan@seznam.cz.",
+    gdpr: state.form.gdpr ? "" : "Bez souhlasu poptávku nemůžeme zpracovat.",
+  };
+  for (const [k, v] of Object.entries(errs)) {
+    $("#e-" + k).textContent = v;
+    const inp = $("#f-" + k); inp.setAttribute("aria-invalid", v ? "true" : "false");
+  }
+  const first = Object.keys(errs).find(k => errs[k]);
+  if (first) { $("#f-" + first).focus(); return; }
+  state.sent = true; render();
+});
+function pruneActs() { for (const id of [...state.acts]) if (!ACTIVITIES.find(a => a.id === id).cities.includes(state.city)) state.acts.delete(id); }
+
+// Open in a realistic example state: Prague, 10 people, two activities pre-selected.
+state.country = "cz"; state.currency = "CZK"; state.city = "prg"; state.acts = new Set(["karts", "tasting"]);
+render();
+</script>
+</body>
+</html>
